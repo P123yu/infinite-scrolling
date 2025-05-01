@@ -101,3 +101,116 @@ here i am thinking that at a time 10 json is coming for page 0 next time 10 json
     }
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+MAIN
+
+
+import axios from "axios";
+import React, { useEffect, useRef, useState } from "react";
+
+const FetchCodingQuestionList = () => {
+  const [items, setItems] = useState([]);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const loadedPages = useRef(new Set()); // To prevent duplicate page fetches
+
+  // Deduplicate by questionId
+  const deduplicateItems = (prevItems, newItems) => {
+    const existingIds = new Set(prevItems.map((item) => item.questionId));
+    return [
+      ...prevItems,
+      ...newItems.filter((item) => !existingIds.has(item.questionId)),
+    ];
+  };
+
+  // Fetch items when page changes
+  useEffect(() => {
+    const fetchItems = async () => {
+      if (loading || loadedPages.current.has(page)) return;
+
+      setLoading(true);
+      loadedPages.current.add(page);
+
+      try {
+        const res = await axios.get(
+          `http://localhost:9001/practice-question/getTemplateByPage?page=${page}&size=10`
+        );
+
+        const newItems = res.data.content;
+        setItems((prev) => deduplicateItems(prev, newItems));
+
+        if (newItems.length < 10) setHasMore(false); // If less than requested, likely end of list
+      } catch (error) {
+        setHasMore(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchItems();
+  }, [page]);
+
+  // Scroll listener with debounce
+  useEffect(() => {
+    let timeout = null;
+
+    const handleScroll = () => {
+      if (!hasMore || loading) return;
+
+      if (timeout) clearTimeout(timeout);
+
+      timeout = setTimeout(() => {
+        const { scrollTop, scrollHeight, clientHeight } =
+          document.documentElement;
+        const scrolledToBottom = scrollTop + clientHeight >= scrollHeight * 0.9;
+
+        if (scrolledToBottom) {
+          setPage((prev) => prev + 1); // Correctly increments based on latest value
+        }
+      }, 200); // 200ms debounce
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [hasMore, loading]);
+
+  return (
+    <div>
+      <h2>Items</h2>
+      {items.map((item) => (
+        <div
+          key={item.questionId}
+          style={{ padding: "50px", borderBottom: "1px solid #ccc" }}
+        >
+          {item.title}
+        </div>
+      ))}
+      {loading && <p>Loading more items...</p>}
+      {!hasMore && <p>No more items to load.</p>}
+    </div>
+  );
+};
+
+export default FetchCodingQuestionList;
+
