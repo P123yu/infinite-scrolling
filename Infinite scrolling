@@ -35,20 +35,28 @@ const FetchCodingQuestionList = () => {
   }, [page]);
 
   useEffect(() => {
+    let timeout = null;
+
     const handleScroll = () => {
       if (!hasMore || loading) return;
-      const { scrollTop, scrollHeight, clientHeight } =
-        document.documentElement;
-      const scrollPosition = scrollTop + clientHeight;
-      const threshold = scrollHeight * 0.8;
 
-      if (scrollPosition >= threshold && hasMore && !loading) {
-        setPage((prev) => prev + 1);
-      }
+      if (timeout) clearTimeout(timeout);
+
+      timeout = setTimeout(() => {
+        const { scrollTop, scrollHeight, clientHeight } =
+          document.documentElement;
+        const scrolledToBottom = scrollTop + clientHeight >= scrollHeight * 0.9;
+
+        if (scrolledToBottom) {
+          setPage((prev) => prev + 1); 
+        }
+      }, 200); // 200ms debounce
     };
+
     window.addEventListener("scroll", handleScroll);
     return () => {
       window.removeEventListener("scroll", handleScroll);
+      if (timeout) clearTimeout(timeout);
     };
   }, [hasMore, loading]);
 
