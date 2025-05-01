@@ -1,0 +1,103 @@
+
+
+ ========================================  REACT =======================================
+import axios from "axios";
+import React, { useEffect, useRef, useState } from "react";
+
+const FetchCodingQuestionList = () => {
+  const [items, setItems] = useState([]);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const loadedPages = useRef(new Set()); // To prevent duplicate page fetches
+
+  // Fetch items when page changes
+  useEffect(() => {
+    const fetchItems = async () => {
+      if (loading || loadedPages.current.has(page)) return;
+      setLoading(true);
+      loadedPages.current.add(page);
+
+      try {
+        const res = await axios.get(
+          `http://localhost:9001/practice-question/getTemplateByPage?page=${page}&size=10`
+        );
+
+        setItems((prev) => [...prev, ...res.data.content]);
+      } catch (error) {
+        setHasMore(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchItems();
+  }, [page]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!hasMore || loading) return;
+      const { scrollTop, scrollHeight, clientHeight } =
+        document.documentElement;
+      const scrollPosition = scrollTop + clientHeight;
+      const threshold = scrollHeight * 0.8;
+
+      if (scrollPosition >= threshold && hasMore && !loading) {
+        setPage((prev) => prev + 1);
+      }
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, [hasMore, loading]);
+
+  console.log(page);
+
+  return (
+    <div>
+      <h2>Items</h2>
+      {items.map((item) => (
+        <div
+          key={item.questionId}
+          style={{ padding: "50px", borderBottom: "1px solid #ccc" }}
+        >
+          {item.title}
+        </div>
+      ))}
+      {loading && <p>Loading more items...</p>}
+      {!hasMore && <p>No more items to load.</p>}
+    </div>
+  );
+};
+
+export default FetchCodingQuestionList;
+
+
+
+here i am thinking that at a time 10 json is coming for page 0 next time 10 json is coming from page1 next time 10 json is coming from page 2 and so on .... and suppose out of 10 json
+5 json is visible so while scrolling if we cross 8th json then we automatically call next 10 json by incrementing page count
+
+
+============================= SPRING BOOT ============================================================
+
+
+    Page<PracticeQuestionTemplate> getPracticeQuestionTemplateBasedOnPage(int page, int size);
+
+
+  @Override
+    public Page<PracticeQuestionTemplate> getPracticeQuestionTemplateBasedOnPage(int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        return practiceQuestionTemplateRepo.findAll(pageable);
+    }
+
+
+
+ @GetMapping("/getTemplateByPage")
+    public ResponseEntity<Page<PracticeQuestionTemplate>> getPracticeQuestionTemplateBasedOnPage(@RequestParam(defaultValue = "0") int page,
+                                                                                 @RequestParam(defaultValue = "10") int size){
+        Page<PracticeQuestionTemplate>  practiceQuestionTemplatePage=practiceQuestionService.getPracticeQuestionTemplateBasedOnPage(page,size);
+        return !practiceQuestionTemplatePage.isEmpty() ? ResponseEntity.ok(practiceQuestionTemplatePage) :ResponseEntity.notFound().build();
+    }
+
+
