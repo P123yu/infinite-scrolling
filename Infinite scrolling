@@ -1,17 +1,36 @@
 
 
  ========================================  REACT =======================================
+
+
+here i am thinking that at a time 10 json is coming for page 0 next time 10 json is coming from page1 next time 10 json is coming from page 2 and so on .... and suppose out of 10 json
+5 json is visible so while scrolling if we cross 8th json then we automatically call next 10 json by incrementing page count
+
+
+
+
+===========================================  
+
 import axios from "axios";
 import React, { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const FetchCodingQuestionList = () => {
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
-  const loadedPages = useRef(new Set()); // To prevent duplicate page fetches
+  const loadedPages = useRef(new Set());
 
-  // Fetch items when page changes
+  const [selectedDifficulties, setSelectedDifficulties] = useState([]);
+  const [selectedTags, setSelectedTags] = useState([]);
+
+  const scrollContainerRef = useRef(null);
+  const navigate = useNavigate();
+
+  const difficulties = ["EASY", "MEDIUM", "HARD"];
+  const tags = ["string", "array", "tree", "math", "dynamic", "greedy"]; // Customize as needed
+
   useEffect(() => {
     const fetchItems = async () => {
       if (loading || loadedPages.current.has(page)) return;
@@ -24,7 +43,9 @@ const FetchCodingQuestionList = () => {
         );
 
         setItems((prev) => [...prev, ...res.data.content]);
+        if (res.data.content.length < 10) setHasMore(false);
       } catch (error) {
+        console.error("Error fetching data:", error);
         setHasMore(false);
       } finally {
         setLoading(false);
@@ -35,56 +56,161 @@ const FetchCodingQuestionList = () => {
   }, [page]);
 
   useEffect(() => {
-    let timeout = null;
+    const scrollEl = scrollContainerRef.current;
+    if (!scrollEl) return;
 
     const handleScroll = () => {
       if (!hasMore || loading) return;
 
-      if (timeout) clearTimeout(timeout);
+      const { scrollTop, scrollHeight, clientHeight } = scrollEl;
+      const nearBottom = scrollTop + clientHeight >= scrollHeight - 300;
 
-      timeout = setTimeout(() => {
-        const { scrollTop, scrollHeight, clientHeight } =
-          document.documentElement;
-        const scrolledToBottom = scrollTop + clientHeight >= scrollHeight * 0.9;
-
-        if (scrolledToBottom) {
-          setPage((prev) => prev + 1); 
-        }
-      }, 200); // 200ms debounce
+      if (nearBottom) {
+        setPage((prev) => prev + 1);
+      }
     };
 
-    window.addEventListener("scroll", handleScroll);
+    const debouncedScroll = () => {
+      clearTimeout(scrollEl._scrollTimeout);
+      scrollEl._scrollTimeout = setTimeout(handleScroll, 150);
+    };
+
+    scrollEl.addEventListener("scroll", debouncedScroll);
+
     return () => {
-      window.removeEventListener("scroll", handleScroll);
-      if (timeout) clearTimeout(timeout);
+      scrollEl.removeEventListener("scroll", debouncedScroll);
+      clearTimeout(scrollEl._scrollTimeout);
     };
   }, [hasMore, loading]);
 
-  console.log(page);
+  const getDifficultyColor = (difficulty) => {
+    switch (difficulty) {
+      case "EASY":
+        return "bg-green-500";
+      case "MEDIUM":
+        return "bg-yellow-500";
+      case "HARD":
+        return "bg-red-500";
+      default:
+        return "bg-gray-500";
+    }
+  };
+
+  const toggleCheckbox = (value, list, setList) => {
+    if (list.includes(value)) {
+      setList(list.filter((v) => v !== value));
+    } else {
+      setList([...list, value]);
+    }
+  };
+
+  const handleNavigateCodeTemplate = (item) => {
+    navigate("/practice-code-editor", { state: { data: item } });
+  };
+
+  const filteredItems = items.filter((item) => {
+    const matchesDifficulty =
+      selectedDifficulties.length === 0 ||
+      selectedDifficulties.includes(item.difficulty);
+    const matchesTag =
+      selectedTags.length === 0 || selectedTags.includes(item.tag);
+    return matchesDifficulty && matchesTag;
+  });
 
   return (
-    <div>
-      <h2>Items</h2>
-      {items.map((item) => (
-        <div
-          key={item.questionId}
-          style={{ padding: "50px", borderBottom: "1px solid #ccc" }}
-        >
-          {item.title}
+    <div className="mx-auto">
+      <div className="grid grid-cols-5 gap-6 h-screen overflow-hidden">
+        {/* Sidebar Filters */}
+        <div className="col-span-1 border-r-2 border-blue-900 p-10 my-5">
+          <h3 className="text-lg font-semibold mb-2">Difficulty</h3>
+          {difficulties.map((level) => (
+            <label key={level} className="flex items-center mb-1">
+              <input
+                type="checkbox"
+                className="mr-2 h-5 w-5 hover:cursor-pointer"
+                checked={selectedDifficulties.includes(level)}
+                onChange={() =>
+                  toggleCheckbox(
+                    level,
+                    selectedDifficulties,
+                    setSelectedDifficulties
+                  )
+                }
+              />
+              <span className="capitalize">{level.toLowerCase()}</span>
+            </label>
+          ))}
+
+          <h3 className="text-lg font-semibold mt-6 mb-2">Tags</h3>
+          {tags.map((tag) => (
+            <label key={tag} className="flex items-center mb-1">
+              <input
+                type="checkbox"
+                className="mr-2 h-5 w-5 hover:cursor-pointer"
+                checked={selectedTags.includes(tag)}
+                onChange={() =>
+                  toggleCheckbox(tag, selectedTags, setSelectedTags)
+                }
+              />
+              <span className="capitalize">{tag}</span>
+            </label>
+          ))}
         </div>
-      ))}
-      {loading && <p>Loading more items...</p>}
-      {!hasMore && <p>No more items to load.</p>}
+
+        {/* Scrollable Questions List */}
+        <div
+          ref={scrollContainerRef}
+          className="col-span-4 overflow-y-auto p-10"
+        >
+          <h2 className="text-2xl font-semibold text-center mb-6">
+            Coding Questions
+          </h2>
+
+          {filteredItems.map((item) => (
+            <div
+              key={item.questionId}
+              className="bg-white shadow-md rounded-lg p-6 mb-6 border border-gray-200 hover:cursor-pointer transition-transform hover:scale-105"
+              onClick={() => handleNavigateCodeTemplate(item)}
+            >
+              <h3 className="text-xl font-semibold text-blue-700 mb-2">
+                {item.title}
+              </h3>
+              <p className="text-gray-700 mb-4">{item.description}</p>
+              <div className="flex gap-3">
+                <span
+                  className={`text-white text-xs font-bold px-2 py-1 rounded ${getDifficultyColor(
+                    item.difficulty
+                  )}`}
+                >
+                  {item.difficulty}
+                </span>
+                {item.tag && (
+                  <span className="bg-gray-100 text-gray-700 text-xs font-medium px-2 py-1 rounded">
+                    {item.tag}
+                  </span>
+                )}
+                {item.tag && (
+                  <span className="bg-gray-100 text-gray-700 text-xs font-medium px-2 py-1 rounded">
+                    {item.score}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {loading && (
+            <p className="text-center text-gray-500">Loading more items...</p>
+          )}
+          {!hasMore && (
+            <p className="text-center text-gray-400">No more items to load.</p>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
 
 export default FetchCodingQuestionList;
-
-
-
-here i am thinking that at a time 10 json is coming for page 0 next time 10 json is coming from page1 next time 10 json is coming from page 2 and so on .... and suppose out of 10 json
-5 json is visible so while scrolling if we cross 8th json then we automatically call next 10 json by incrementing page count
 
 
 ============================= SPRING BOOT ============================================================
@@ -221,4 +347,96 @@ const FetchCodingQuestionList = () => {
 };
 
 export default FetchCodingQuestionList;
+
+
+
+
+
+
+
+
+
+
+
+import axios from "axios";
+import React, { useEffect, useRef, useState } from "react";
+
+const FetchCodingQuestionList = () => {
+  const [items, setItems] = useState([]);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const loadedPages = useRef(new Set()); // To prevent duplicate page fetches
+
+  // Fetch items when page changes
+  useEffect(() => {
+    const fetchItems = async () => {
+      if (loading || loadedPages.current.has(page)) return;
+      setLoading(true);
+      loadedPages.current.add(page);
+
+      try {
+        const res = await axios.get(
+          `http://localhost:9001/practice-question/getTemplateByPage?page=${page}&size=10`
+        );
+
+        setItems((prev) => [...prev, ...res.data.content]);
+      } catch (error) {
+        setHasMore(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchItems();
+  }, [page]);
+
+  useEffect(() => {
+    let timeout = null;
+
+    const handleScroll = () => {
+      if (!hasMore || loading) return;
+
+      if (timeout) clearTimeout(timeout);
+
+      timeout = setTimeout(() => {
+        const { scrollTop, scrollHeight, clientHeight } =
+          document.documentElement;
+        const scrolledToBottom = scrollTop + clientHeight >= scrollHeight * 0.9;
+
+        if (scrolledToBottom) {
+          setPage((prev) => prev + 1); 
+        }
+      }, 200); // 200ms debounce
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [hasMore, loading]);
+
+  console.log(page);
+
+  return (
+    <div>
+      <h2>Items</h2>
+      {items.map((item) => (
+        <div
+          key={item.questionId}
+          style={{ padding: "50px", borderBottom: "1px solid #ccc" }}
+        >
+          {item.title}
+        </div>
+      ))}
+      {loading && <p>Loading more items...</p>}
+      {!hasMore && <p>No more items to load.</p>}
+    </div>
+  );
+};
+
+export default FetchCodingQuestionList;
+
+
 
